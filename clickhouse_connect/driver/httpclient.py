@@ -211,7 +211,9 @@ class HttpClient(Client):
                                      stream=True,
                                      retries=self.query_retries,
                                      fields=fields,
-                                     server_wait=not context.streaming)
+                                     server_wait=not context.streaming,
+                                     timeout=context.timeout,
+                                     )
         byte_source = RespBuffCls(ResponseSource(response))  # pylint: disable=not-callable
         context.set_response_tz(self._check_tz_change(response.headers.get('X-ClickHouse-Timezone')))
         query_result = self._transform.parse_response(byte_source, context)
@@ -340,7 +342,8 @@ class HttpClient(Client):
                      stream: bool = False,
                      server_wait: bool = True,
                      fields: Optional[Dict[str, tuple]] = None,
-                     error_handler: Callable = None) -> HTTPResponse:
+                     error_handler: Callable = None,
+                     timeout: Optional[Union[Timeout, int, float]] = None) -> HTTPResponse:
         if isinstance(data, str):
             data = data.encode()
         headers = dict_copy(self.headers, headers)
@@ -358,7 +361,7 @@ class HttpClient(Client):
         url = f'{self.url}?{urlencode(final_params)}'
         kwargs = {
             'headers': headers,
-            'timeout': self.timeout,
+            'timeout': timeout or self.timeout,  # Use the supplied timeout if set
             'retries': self.http_retries,
             'preload_content': not stream
         }
@@ -406,12 +409,12 @@ class HttpClient(Client):
                     error_handler(response)
                 self._error_handler(response)
 
-    def ping(self):
+    def ping(self, timeout: Union[int, float, Timeout] = 3):
         """
         See BaseClient doc_string for this method
         """
         try:
-            response = self.http.request('GET', f'{self.url}/ping', timeout=3)
+            response = self.http.request('GET', f'{self.url}/ping', timeout=timeout)
             return 200 <= response.status < 300
         except HTTPError:
             logger.debug('ping failed', exc_info=True)

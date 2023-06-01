@@ -18,6 +18,7 @@ from clickhouse_connect.json_impl import any_to_json
 from clickhouse_connect.driver.exceptions import StreamClosedError, ProgrammingError
 from clickhouse_connect.driver.options import check_arrow, pd_extended_dtypes
 from clickhouse_connect.driver.context import BaseQueryContext
+from urllib3 import Timeout
 
 logger = logging.getLogger(__name__)
 commands = 'CREATE|ALTER|SYSTEM|GRANT|REVOKE|CHECK|DETACH|DROP|DELETE|KILL|' + \
@@ -55,7 +56,8 @@ class QueryContext(BaseQueryContext):
                  as_pandas: bool = False,
                  streaming: bool = False,
                  apply_server_tz: bool = False,
-                 external_data: Optional[ExternalData] = None):
+                 external_data: Optional[ExternalData] = None,
+                 timeout: Optional[Union[Timeout, float, int]] = None):
         """
         Initializes various configuration settings for the query context
 
@@ -82,6 +84,7 @@ class QueryContext(BaseQueryContext):
           objects with the selected timezone
         :param column_tzs A dictionary of column names to tzinfo objects (or strings that will be converted to
           tzinfo objects).  The timezone will be applied to datetime objects returned in the query
+        :param timeout Optional timeout passed to urllib3 for the query
         """
         super().__init__(settings,
                          query_formats,
@@ -119,6 +122,7 @@ class QueryContext(BaseQueryContext):
         self.as_pandas = as_pandas
         self.use_pandas_na = as_pandas and pd_extended_dtypes
         self.streaming = streaming
+        self.timeout = timeout
         self._update_query()
 
     @property
@@ -187,7 +191,9 @@ class QueryContext(BaseQueryContext):
                      use_extended_dtypes: Optional[bool] = None,
                      as_pandas: bool = False,
                      streaming: bool = False,
-                     external_data: Optional[ExternalData] = None) -> 'QueryContext':
+                     external_data: Optional[ExternalData] = None,
+                     timeout: Optional[Union[Timeout, int, float]] = None,
+                     ) -> 'QueryContext':
         """
         Creates Query context copy with parameters overridden/updated as appropriate.
         """
@@ -208,7 +214,9 @@ class QueryContext(BaseQueryContext):
                             as_pandas,
                             streaming,
                             self.apply_server_tz,
-                            self.external_data if external_data is None else external_data)
+                            self.external_data if external_data is None else external_data,
+                            self.timeout if timeout is None else timeout,
+                            )
 
     def _update_query(self):
         self.final_query, self.bind_params = bind_query(self.query, self.parameters, self.server_tz)
